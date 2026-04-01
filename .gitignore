@@ -1,0 +1,52 @@
+# My Personal files
+compose.build.yaml
+compose.haproxy.yaml
+compose.public.yaml
+haproxy.cfg
+.dockerignore
+
+# dependencies
+node_modules/
+
+# logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# runtime
+*.pid
+*.pid.lock
+*.seed
+
+# env files
+.env
+.env.*
+!.env.example
+
+# coverage / build
+coverage/
+.nyc_output/
+dist/
+build/
+.cache/
+tmp/
+temp/
+
+# editor / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# optional local docker overrides
+compose.override.yaml
+compose.override.yml
+
+# local test artifacts
+*.tgz

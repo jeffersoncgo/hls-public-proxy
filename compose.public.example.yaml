@@ -1,0 +1,11 @@
+services:
+  haproxy:
+    image: haproxy:alpine
+    hostname: haproxy
+    container_name: haproxy
+    ports:
+      - "3003:80"
+      - "8404:8404"
+    volumes:
+      - /my/path/to/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    restart: unless-stopped

@@ -1,0 +1,43 @@
+global
+    log stdout format raw local0
+    maxconn 4096
+
+defaults
+    log     global
+    mode    http
+    option  httplog
+    option  dontlognull
+    option  forwardfor
+    option  http-server-close
+    timeout connect  5s
+    timeout client   30s
+    timeout server   60s
+
+# ── Stats UI ─────────────────────────────────────────────────────
+frontend stats
+    bind *:8404
+    stats enable
+    stats uri /stats
+    stats refresh 10s
+    stats show-legends
+
+# ── Main frontend ─────────────────────────────────────────────────
+frontend http_in
+    bind *:80
+
+    # Pass real client IP to the Node servers
+    http-request set-header X-Forwarded-For %[src]
+    http-request set-header X-Forwarded-Proto http
+
+    default_backend hls-public-proxy
+
+# ── Backend: round-robin across proxy replicas ────────────────────
+backend hls-public-proxy
+    balance roundrobin
+
+    # Health-check via /health endpoint
+    option httpchk GET /health
+    http-check expect status 200
+
+    server dockerpc hls-public-proxy:3000 check inter 5s fall 2 rise 2
+    server jeffersonpc 192.168.1.253:3002 check inter 5s fall 2 rise 2

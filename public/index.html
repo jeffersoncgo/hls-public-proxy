@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>HLS Public Proxy</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root{
+      --bg:#0b1020;
+      --panel:#121933;
+      --panel-2:#0f1530;
+      --text:#e9eefc;
+      --muted:#9fb0d3;
+      --line:#26325f;
+      --accent:#79a8ff;
+      --accent-2:#5eead4;
+      --ok:#8ef0a7;
+      --warn:#ffd479;
+      --danger:#ff9aa2;
+      --shadow:0 18px 48px rgba(0,0,0,.28);
+      --radius:18px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0;background:linear-gradient(180deg,#0b1020 0%,#09101b 100%);color:var(--text);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}
+    a{color:var(--accent)}
+    code,pre,input,textarea{font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,monospace}
+
+    .wrap{max-width:1180px;margin:0 auto;padding:28px}
+    .hero{
+      display:grid;
+      grid-template-columns:1.2fr .8fr;
+      gap:20px;
+      margin-bottom:20px;
+    }
+
+    .card{
+      background:linear-gradient(180deg,var(--panel) 0%,var(--panel-2) 100%);
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+    }
+
+    .card-pad{padding:22px}
+    h1,h2,h3{margin:0 0 10px}
+    h1{font-size:34px;line-height:1.1}
+    h2{font-size:22px}
+    h3{font-size:16px}
+    p{margin:0 0 12px;color:var(--muted)}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,monospace}
+    .grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:20px;
+      margin-bottom:20px;
+    }
+    .grid-1{
+      display:grid;
+      gap:20px;
+      margin-bottom:20px;
+    }
+
+    .badges{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin-top:14px;
+    }
+    .badge{
+      padding:8px 12px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.03);
+      color:var(--text);
+      font-size:13px;
+    }
+
+    .kv{
+      display:grid;
+      grid-template-columns:180px 1fr;
+      gap:10px 14px;
+      align-items:start;
+    }
+    .kv div:nth-child(odd){
+      color:var(--text);
+      font-weight:600;
+    }
+    .kv div:nth-child(even){
+      color:var(--muted);
+    }
+
+    label{
+      display:block;
+      margin:14px 0 6px;
+      font-weight:600;
+    }
+
+    input, textarea, select{
+      width:100%;
+      color:var(--text);
+      background:#0a1124;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:12px 14px;
+      outline:none;
+    }
+
+    textarea{min-height:88px;resize:vertical}
+    input:focus, textarea:focus{
+      border-color:var(--accent);
+      box-shadow:0 0 0 3px rgba(121,168,255,.14);
+    }
+
+    .row{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin-top:14px;
+    }
+
+    button{
+      appearance:none;
+      border:1px solid var(--line);
+      background:#111a38;
+      color:var(--text);
+      border-radius:12px;
+      padding:11px 14px;
+      cursor:pointer;
+      transition:.15s ease;
+      font-weight:600;
+    }
+
+    button:hover{
+      transform:translateY(-1px);
+      border-color:var(--accent);
+    }
+
+    button.primary{
+      background:linear-gradient(180deg,#2152c8 0%,#173d9d 100%);
+      border-color:#2b63e3;
+    }
+
+    button.good{
+      background:linear-gradient(180deg,#0f6d5f 0%,#0a554a 100%);
+      border-color:#169f8a;
+    }
+
+    .result{
+      margin-top:14px;
+      padding:14px;
+      border-radius:14px;
+      background:#0a1124;
+      border:1px solid var(--line);
+      overflow:auto;
+      white-space:pre-wrap;
+      word-break:break-word;
+    }
+
+    .small{font-size:13px;color:var(--muted)}
+    .ok{color:var(--ok)}
+    .warn{color:var(--warn)}
+    .danger{color:var(--danger)}
+
+    .footer{
+      text-align:center;
+      color:var(--muted);
+      padding:10px 0 24px;
+      font-size:13px;
+    }
+
+    @media (max-width: 920px){
+      .hero,.grid{grid-template-columns:1fr}
+      .kv{grid-template-columns:1fr}
+    }
+  </style>
+<script type="text/javascript" nonce="ff8755e5f0be4f9fbdbc9af7de9" src="//local.adguard.org?ts=1775053831229&amp;type=content-script&amp;dmn=chatgpt.com&amp;url=https%3A%2F%2Fchatgpt.com%2Fbackend-api%2Festuary%2Fcontent%3Fid%3Dfile_00000000ed6471f5b1655776720bd9dd%26ts%3D493070%26p%3Dfs%26cid%3D1%26sig%3D38e646356e56957d5e2c5fff4e09a266e97d4733005dfc09b65d4d53fd12aff0%26v%3D0&amp;app=chrome.exe&amp;css=2&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=1"></script><script type="text/javascript" nonce="ff8755e5f0be4f9fbdbc9af7de9" src="//local.adguard.org?ts=1775053831229&amp;name=AdGuard%20Extra&amp;name=AdGuard%20Popup%20Blocker&amp;type=user-script"></script></head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <div class="card card-pad">
+        <h1>HLS Public Proxy</h1>
+        <p>
+          Proxy HLS manifests and media segments, rewrite child URLs automatically, test everything directly from this page, and deploy it behind HAProxy for load balancing.
+        </p>
+        <div class="badges">
+          <span class="badge">Manifest rewriting</span>
+          <span class="badge">Segment passthrough</span>
+          <span class="badge">Base64 URL support</span>
+          <span class="badge">Custom referer</span>
+          <span class="badge">Known origins</span>
+          <span class="badge">CORS-friendly</span>
+          <span class="badge">HAProxy-ready</span>
+        </div>
+      </div>
+
+      <div class="card card-pad">
+        <h2>Current Proxy Base</h2>
+        <div class="result mono" id="baseUrlBox"></div>
+        <div class="row">
+          <button class="primary" id="openRootBtn">Open Root</button>
+          <button id="openHealthBtn">Open /health</button>
+          <button id="copyBaseBtn">Copy Base URL</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="card card-pad">
+        <h2>URL Builder</h2>
+
+        <label for="targetUrl">Target upstream URL</label>
+        <input id="targetUrl" type="text" placeholder="https://example.com/index.m3u8">
+
+        <label for="preferredReferer">preferred_referer</label>
+        <input id="preferredReferer" type="text" placeholder="https://example.com/">
+
+        <label for="knownOrigins">known_origins</label>
+        <textarea id="knownOrigins" placeholder="One origin per line, or comma-separated&#10;https://example.com&#10;https://cdn.example.com"></textarea>
+
+        <label for="encodingMode">Input mode</label>
+        <select id="encodingMode">
+          <option value="base64" selected>Use u= (Base64)</option>
+          <option value="url">Use url= (URL encoded)</option>
+        </select>
+
+        <div class="row">
+          <button class="primary" id="buildBtn">Build URLs</button>
+          <button id="useExampleBtn">Use Example</button>
+          <button id="clearBtn">Clear</button>
+        </div>
+
+        <div class="small" style="margin-top:12px">
+          This page automatically uses the current page origin as the proxy base.
+        </div>
+      </div>
+
+      <div class="card card-pad">
+        <h2>Route Summary</h2>
+        <div class="kv">
+          <div>GET /</div>
+          <div>Landing page / docs / quick test UI</div>
+
+          <div>GET /health</div>
+          <div>Returns runtime status and cache counters</div>
+
+          <div>GET /proxy/manifest</div>
+          <div>Fetches an upstream manifest and rewrites child URLs</div>
+
+          <div>GET /proxy/segment</div>
+          <div>Fetches and streams segments or related assets</div>
+
+          <div>url=</div>
+          <div>Normal URL-encoded upstream URL</div>
+
+          <div>u=</div>
+          <div>Base64-encoded upstream URL</div>
+
+          <div>preferred_referer=</div>
+          <div>Overrides the referer sent upstream</div>
+
+          <div>known_origins=</div>
+          <div>One or more trusted origins used for referer handling</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid-1">
+      <div class="card card-pad">
+        <h2>Generated Proxy URLs</h2>
+
+        <label for="manifestUrl">Manifest URL</label>
+        <textarea id="manifestUrl" readonly></textarea>
+
+        <label for="segmentUrl">Segment URL</label>
+        <textarea id="segmentUrl" readonly></textarea>
+
+        <div class="row">
+          <button class="good" id="openManifestBtn">Open Manifest</button>
+          <button id="copyManifestBtn">Copy Manifest URL</button>
+          <button id="openSegmentBtn">Open Segment</button>
+          <button id="copySegmentBtn">Copy Segment URL</button>
+        </div>
+      </div>
+
+      <div class="card card-pad">
+        <h2>Included Example</h2>
+        <p>This page includes the exact example you requested.</p>
+        <div class="result mono" id="exampleBox"></div>
+        <div class="row">
+          <button id="copyExampleBtn">Copy Example URL</button>
+          <button id="openExampleBtn">Open Example</button>
+          <button id="loadExampleBtn">Load Example Into Builder</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="card card-pad">
+        <h2>How It Works</h2>
+        <div class="kv">
+          <div>/proxy/manifest</div>
+          <div>Fetches the upstream playlist, validates it, rewrites child URLs, and returns the rewritten result.</div>
+
+          <div>/proxy/segment</div>
+          <div>Fetches and streams media segments or related assets back to the client.</div>
+
+          <div>preferred_referer</div>
+          <div>Used when the upstream expects a specific referer to allow access.</div>
+
+          <div>known_origins</div>
+          <div>Used to decide when the proxy should apply the preferred referer logic to upstream requests.</div>
+
+          <div>Base64 mode</div>
+          <div>Useful for long URLs or when combining extra query parameters.</div>
+
+          <div>HAProxy / load balancing</div>
+          <div>Works well behind HAProxy or similar reverse proxies, so multiple proxy instances can be balanced behind one public entrypoint.</div>
+        </div>
+      </div>
+
+      <div class="card card-pad">
+        <h2>Notes</h2>
+        <ul class="small" style="margin:0;padding-left:18px;line-height:1.8">
+          <li><span class="ok">/proxy/manifest</span> supports both <span class="mono">url=</span> and <span class="mono">u=</span>.</li>
+          <li><span class="ok">/proxy/segment</span> supports both <span class="mono">url=</span> and <span class="mono">u=</span>.</li>
+          <li>If both <span class="mono">url</span> and <span class="mono">u</span> are present, <span class="mono">url</span> should be treated as the primary input.</li>
+          <li><span class="warn">known_origins</span> may be repeated multiple times in the final URL.</li>
+          <li><span class="warn">preferred_referer</span> should be URL-encoded in the query string.</li>
+          <li><span class="warn">u</span> should contain the Base64 version of the raw target URL.</li>
+          <li><span class="ok">HAProxy</span> can be placed in front of one or more proxy instances for load balancing and a single public endpoint.</li>
+        </ul>
+      </div>
+    </section>
+
+    <div class="footer">
+      HLS Public Proxy landing page • HAProxy/load-balancer friendly
+    </div>
+  </div>
+
+  <script>
+    const proxyBase = location.origin;
+
+    const example = {
+      rawUrl: 'https://2.cdn2embed.site/cazetv/index.m3u8',
+      preferredReferer: 'https://3.embedcanaisonline.com/',
+      knownOrigins: ['https://2.cdn2embed.site']
+    };
+
+    const els = {
+      baseUrlBox: document.getElementById('baseUrlBox'),
+      targetUrl: document.getElementById('targetUrl'),
+      preferredReferer: document.getElementById('preferredReferer'),
+      knownOrigins: document.getElementById('knownOrigins'),
+      encodingMode: document.getElementById('encodingMode'),
+      manifestUrl: document.getElementById('manifestUrl'),
+      segmentUrl: document.getElementById('segmentUrl'),
+      exampleBox: document.getElementById('exampleBox'),
+
+      buildBtn: document.getElementById('buildBtn'),
+      useExampleBtn: document.getElementById('useExampleBtn'),
+      clearBtn: document.getElementById('clearBtn'),
+
+      openRootBtn: document.getElementById('openRootBtn'),
+      openHealthBtn: document.getElementById('openHealthBtn'),
+      copyBaseBtn: document.getElementById('copyBaseBtn'),
+
+      openManifestBtn: document.getElementById('openManifestBtn'),
+      copyManifestBtn: document.getElementById('copyManifestBtn'),
+      openSegmentBtn: document.getElementById('openSegmentBtn'),
+      copySegmentBtn: document.getElementById('copySegmentBtn'),
+
+      copyExampleBtn: document.getElementById('copyExampleBtn'),
+      openExampleBtn: document.getElementById('openExampleBtn'),
+      loadExampleBtn: document.getElementById('loadExampleBtn')
+    };
+
+    function encodeBase64Utf8(value) {
+      return btoa(unescape(encodeURIComponent(value)));
+    }
+
+    function parseKnownOrigins(input) {
+      return input
+        .split(/\n|,/)
+        .map(v => v.trim())
+        .filter(Boolean);
+    }
+
+    function buildQuery(targetUrl, preferredReferer, knownOrigins, mode, route) {
+      const params = new URLSearchParams();
+
+      if (mode === 'url') {
+        params.set('url', targetUrl);
+      } else {
+        params.set('u', encodeBase64Utf8(targetUrl));
+      }
+
+      if (preferredReferer.trim()) {
+        params.set('preferred_referer', preferredReferer.trim());
+      }
+
+      for (const origin of knownOrigins) {
+        params.append('known_origins', origin);
+      }
+
+      return `${proxyBase}${route}?${params.toString()}`;
+    }
+
+    function buildAll() {
+      const targetUrl = els.targetUrl.value.trim();
+      const preferredReferer = els.preferredReferer.value.trim();
+      const knownOrigins = parseKnownOrigins(els.knownOrigins.value);
+      const mode = els.encodingMode.value;
+
+      if (!targetUrl) {
+        els.manifestUrl.value = '';
+        els.segmentUrl.value = '';
+        return;
+      }
+
+      els.manifestUrl.value = buildQuery(targetUrl, preferredReferer, knownOrigins, mode, '/proxy/manifest');
+      els.segmentUrl.value = buildQuery(targetUrl, preferredReferer, knownOrigins, mode, '/proxy/segment');
+    }
+
+    function loadExample() {
+      els.targetUrl.value = example.rawUrl;
+      els.preferredReferer.value = example.preferredReferer;
+      els.knownOrigins.value = example.knownOrigins.join('\n');
+      els.encodingMode.value = 'base64';
+      buildAll();
+    }
+
+    async function copyText(value) {
+      if (!value) return;
+      try {
+        await navigator.clipboard.writeText(value);
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = value;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+    }
+
+    function openUrl(url) {
+      if (!url) return;
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+
+    function buildExactExampleUrl() {
+      const params = new URLSearchParams();
+      params.set('u', 'aHR0cHM6Ly8yLmNkbjJlbWJlZC5zaXRlL2NhemV0di9pbmRleC5tM3U4');
+      params.set('preferred_referer', 'https://3.embedcanaisonline.com/');
+      params.append('known_origins', 'https://2.cdn2embed.site');
+      return `${proxyBase}/proxy/manifest?${params.toString()}`;
+    }
+
+    function init() {
+      els.baseUrlBox.textContent = proxyBase;
+      els.exampleBox.textContent = buildExactExampleUrl();
+
+      els.buildBtn.addEventListener('click', buildAll);
+      els.useExampleBtn.addEventListener('click', loadExample);
+      els.clearBtn.addEventListener('click', () => {
+        els.targetUrl.value = '';
+        els.preferredReferer.value = '';
+        els.knownOrigins.value = '';
+        els.encodingMode.value = 'base64';
+        els.manifestUrl.value = '';
+        els.segmentUrl.value = '';
+      });
+
+      els.targetUrl.addEventListener('input', buildAll);
+      els.preferredReferer.addEventListener('input', buildAll);
+      els.knownOrigins.addEventListener('input', buildAll);
+      els.encodingMode.addEventListener('change', buildAll);
+
+      els.openRootBtn.addEventListener('click', () => openUrl(`${proxyBase}/`));
+      els.openHealthBtn.addEventListener('click', () => openUrl(`${proxyBase}/health`));
+      els.copyBaseBtn.addEventListener('click', () => copyText(proxyBase));
+
+      els.openManifestBtn.addEventListener('click', () => openUrl(els.manifestUrl.value));
+      els.copyManifestBtn.addEventListener('click', () => copyText(els.manifestUrl.value));
+      els.openSegmentBtn.addEventListener('click', () => openUrl(els.segmentUrl.value));
+      els.copySegmentBtn.addEventListener('click', () => copyText(els.segmentUrl.value));
+
+      els.copyExampleBtn.addEventListener('click', () => copyText(buildExactExampleUrl()));
+      els.openExampleBtn.addEventListener('click', () => openUrl(buildExactExampleUrl()));
+      els.loadExampleBtn.addEventListener('click', loadExample);
+
+      loadExample();
+    }
+
+    init();
+  </script>
+</body>
+</html>
