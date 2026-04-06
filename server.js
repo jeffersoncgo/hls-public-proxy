@@ -21,6 +21,7 @@ const SEGMENT_CACHE_TTL_MS = parseInt(process.env.SEGMENT_CACHE_TTL_MS || '90000
 const MANIFEST_CACHE_MAX = parseInt(process.env.MANIFEST_CACHE_MAX || '200', 10);
 const MANIFEST_CACHE_TTL_MS = parseInt(process.env.MANIFEST_CACHE_TTL_MS || '4000', 10);
 const SEGMENT_CACHE_MAX_BYTES = parseInt(process.env.SEGMENT_CACHE_MAX_BYTES || '2000000', 10);
+const FETCH_TIMEOUT_MS = parseInt(process.env.FETCH_TIMEOUT_MS || '15000', 10);
 
 const app = express();
 app.disable('x-powered-by');
@@ -52,9 +53,19 @@ async function fetchLimited(url, opts = {}) {
     await delay(15);
   }
   activeCount += 1;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    return await fetchFn(url, { ...opts, redirect: 'follow' });
+    return await fetchFn(url, { ...opts, redirect: 'follow', signal: controller.signal });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      const timeout = new Error(`Upstream timed out after ${FETCH_TIMEOUT_MS}ms: ${url}`);
+      timeout.isTimeout = true;
+      throw timeout;
+    }
+    throw err;
   } finally {
+    clearTimeout(timer);
     activeCount -= 1;
   }
 }
@@ -336,6 +347,89 @@ app.get('/proxy/manifest', async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────
+//  GET /proxy/stream  — for radios, Icecast, Shoutcast, direct
+//  audio/video streams that are not HLS (no manifest, no segments).
+//  Unlike /proxy/segment it never caches and always pipes indefinitely.
+//  Usage: /proxy/stream?url=<encoded>&preferred_referer=<encoded>
+// ─────────────────────────────────────────────────────────────────
+app.get('/proxy/stream', async (req, res) => {
+  const url = decodeUrl(req);  // already handles ?url= (encoded) and ?u= (base64)
+  if (!url || !isSafeHttpUrl(url)) {
+    return res.status(400).send('Parâmetro ?url= (encoded) ou ?u= (base64) com http/https é obrigatório.');
+  }
+
+  const prefReferer = decodePreferredReferer(req, url);
+  const headers = browserHeaders(prefReferer);
+
+  // Forward Range header so players can seek in finite streams
+  if (req.headers.range) headers.Range = req.headers.range;
+
+  // Icecast/Shoutcast metadata requested by some players
+  if (req.headers['icy-metadata']) headers['Icy-MetaData'] = req.headers['icy-metadata'];
+
+  try {
+    const cookies = await getFlareCookies(url, prefReferer);
+    if (cookies) headers.Cookie = cookies;
+
+    // Use fetchFn directly — we don't want this counted against the
+    // parallel-segment semaphore since it will stay open for minutes.
+    const streamController = new AbortController();
+    const streamTimer = setTimeout(() => streamController.abort(), FETCH_TIMEOUT_MS);
+    const upstream = await fetchFn(url, { method: 'GET', headers, redirect: 'follow', signal: streamController.signal });
+    clearTimeout(streamTimer);
+
+    if (!upstream.ok && upstream.status !== 206) {
+      return res.status(upstream.status).send(`Upstream returned ${upstream.status}`);
+    }
+
+    // Pass through audio/video content-type and Icecast metadata headers
+    const passthroughHeaders = [
+      'content-type',
+      'content-length',
+      'content-range',
+      'accept-ranges',
+      'cache-control',
+      'icy-name',
+      'icy-genre',
+      'icy-url',
+      'icy-br',
+      'icy-sr',
+      'icy-metaint',
+      'icy-description',
+    ];
+
+    upstream.headers.forEach((value, key) => {
+      if (passthroughHeaders.includes(key.toLowerCase())) {
+        res.set(key, value);
+      }
+    });
+
+    // Default to audio/mpeg if upstream didn't tell us
+    if (!res.getHeader('content-type')) {
+      res.set('Content-Type', 'audio/mpeg');
+    }
+
+    // Never cache live streams
+    res.set('Cache-Control', 'no-store');
+    res.status(upstream.status);
+
+    const nodeBody = toNodeStream(upstream.body);
+    if (!nodeBody) {
+      return res.status(502).send('Could not stream upstream body.');
+    }
+
+    nodeBody.pipe(res);
+
+    nodeBody.on('error', () => res.end());
+    req.on('close', () => {
+      if (typeof nodeBody.destroy === 'function') nodeBody.destroy();
+    });
+  } catch (error) {
+    return res.status(502).send(`Error streaming: ${error?.message || String(error)}`);
+  }
+});
+
 app.get('/proxy/segment', async (req, res) => {
   const url = decodeUrl(req);
   if (!url || !isSafeHttpUrl(url)) {
@@ -354,23 +448,9 @@ app.get('/proxy/segment', async (req, res) => {
     return res.status(200).send(cached.body);
   }
 
+  // browserHeaders already sets Referer/Origin from prefReferer — always
+  // send them so servers that validate the referer don't reject the request.
   const headers = browserHeaders(prefReferer);
-
-  try {
-    const parsed = new URL(url);
-    const known = knownOrigins.some(origin => {
-      try {
-        const candidate = new URL(origin);
-        return parsed.origin === candidate.origin || parsed.host === candidate.host;
-      } catch {
-        return false;
-      }
-    });
-
-    if (known) {
-      headers.Referer = prefReferer;
-    }
-  } catch {}
 
   if (req.headers.range) headers.Range = req.headers.range;
 
@@ -438,6 +518,11 @@ app.get('/proxy/segment', async (req, res) => {
 const server = app.listen(PORT, HOST, () => {
   console.log(`HLS public proxy listening on ${HOST}:${PORT}`);
 });
+
+// Keep-alive + headers timeout must exceed upstream FETCH_TIMEOUT_MS
+// so Express closes the request before nginx/Caddy fires a 504.
+server.keepAliveTimeout = FETCH_TIMEOUT_MS + 5000;
+server.headersTimeout   = FETCH_TIMEOUT_MS + 6000;
 
 function shutdown(signal) {
   console.log(`Received ${signal}, shutting down...`);

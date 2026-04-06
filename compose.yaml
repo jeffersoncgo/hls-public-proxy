@@ -9,7 +9,7 @@ services:
       PORT: 3000
       HOST: 0.0.0.0
       MAX_PARALLEL: 64
-      DEFAULT_REFERER: https://example.com/
+      # DEFAULT_REFERER: https://example.com/
       # PROXY_BASE: https://localhost:3000/proxy/
       # ENABLE_FLARESOLVERR: 0
       # FLARESOLVERR: http://flaresolverr:8191
