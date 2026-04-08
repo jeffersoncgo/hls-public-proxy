@@ -1,26 +1,11 @@
 services:
-  hls-public-proxy:
-    image: jeffersoncgo/hls-public-proxy:latest
-    container_name: hls-public-proxy
-    hostname: hls-public-proxy
-    restart: unless-stopped
+  haproxy:
+    image: haproxy:alpine
+    hostname: haproxy
+    container_name: haproxy
     ports:
-      - "3002:3000"
-    environment:
-      PORT: 3000 # Listen port inside the container
-      HOST: 0.0.0.0 # Listen on all interfaces
-      MAX_PARALLEL: 64 # OPTIONAL: Maximum number of parallel fetches for manifest and segments (default 64)
-      # DEFAULT_REFERER: https://example.com/ # OPTIONAL: Set a default referer header for all requests
-      # PROXY_BASE: https://proxy.example.com # OPTIONAL: Base URL for the proxy, used in generated manifest URLs
-      # FLARESOLVERR: http://flaresolverr:8191 # OPTIONAL: URL of a FlareSolverr instance for bypassing anti-bot protections
-      # SEGMENT_CACHE_MAX: 500 # OPTIONAL: Maximum number of segments to cache in memory
-      # SEGMENT_CACHE_TTL_MS: 90000 # OPTIONAL: Time-to-live for cached segments in milliseconds
-      # MANIFEST_CACHE_MAX: 200 # OPTIONAL: Maximum number of manifests to cache in memory
-      # MANIFEST_CACHE_TTL_MS: 4000 # OPTIONAL: Time-to-live for cached manifests in milliseconds
-      # SEGMENT_CACHE_MAX_BYTES: 2000000 # OPTIONAL: Maximum size in bytes for cached segments (default 2MB)
-    networks:
-      - media_center
-
-networks:
-    media_center:
-        external: true
+      - "3003:80"
+      - "8404:8404"
+    volumes:
+      - /my/path/to/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    restart: unless-stopped
