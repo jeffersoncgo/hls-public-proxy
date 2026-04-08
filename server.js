@@ -9,19 +9,69 @@ const nodeFetch = require('node-fetch');
 
 const fetchFn = typeof globalThis.fetch === 'function' ? globalThis.fetch : nodeFetch;
 
-const PORT = parseInt(process.env.PORT || '3000', 10);
-const HOST = process.env.HOST || '0.0.0.0';
-const MAX_PARALLEL = parseInt(process.env.MAX_PARALLEL || '64', 10);
-const DEFAULT_REFERER = process.env.DEFAULT_REFERER || 'https://example.com/';
-const PROXY_BASE = process.env.PROXY_BASE || '';
-const ENABLE_FLARESOLVERR = process.env.ENABLE_FLARESOLVERR === '1';
-const FLARESOLVERR = process.env.FLARESOLVERR || 'http://flaresolverr:8191';
-const SEGMENT_CACHE_MAX = parseInt(process.env.SEGMENT_CACHE_MAX || '500', 10);
-const SEGMENT_CACHE_TTL_MS = parseInt(process.env.SEGMENT_CACHE_TTL_MS || '90000', 10);
-const MANIFEST_CACHE_MAX = parseInt(process.env.MANIFEST_CACHE_MAX || '200', 10);
-const MANIFEST_CACHE_TTL_MS = parseInt(process.env.MANIFEST_CACHE_TTL_MS || '4000', 10);
-const SEGMENT_CACHE_MAX_BYTES = parseInt(process.env.SEGMENT_CACHE_MAX_BYTES || '2000000', 10);
-const FETCH_TIMEOUT_MS = parseInt(process.env.FETCH_TIMEOUT_MS || '15000', 10);
+// ─────────────────────────────────────────────────────────────────
+//  CLI argument parser — supports --KEY=value and --KEY value
+//  CLI args take priority over environment variables.
+//  Usage: node server.js --PORT=3003 --MAX_PARALLEL=64
+// ─────────────────────────────────────────────────────────────────
+function parseCliArgs(argv) {
+  const args = {};
+  const raw = argv.slice(2); // skip 'node' and script path
+  for (let i = 0; i < raw.length; i++) {
+    const arg = raw[i];
+    if (arg.startsWith('--')) {
+      const withoutDashes = arg.slice(2);
+      const eqIdx = withoutDashes.indexOf('=');
+      if (eqIdx !== -1) {
+        // --KEY=value
+        const key = withoutDashes.slice(0, eqIdx).toUpperCase();
+        const value = withoutDashes.slice(eqIdx + 1);
+        args[key] = value;
+      } else {
+        // --KEY value  (next token is the value if it doesn't start with --)
+        const key = withoutDashes.toUpperCase();
+        const next = raw[i + 1];
+        if (next !== undefined && !next.startsWith('--')) {
+          args[key] = next;
+          i++;
+        } else {
+          args[key] = 'true'; // flag with no value
+        }
+      }
+    }
+  }
+  return args;
+}
+
+const CLI = parseCliArgs(process.argv);
+
+// Helper: read a config value — CLI first, then env, then default.
+function cfg(key, fallback) {
+  return key in CLI ? CLI[key] : (process.env[key] !== undefined ? process.env[key] : fallback);
+}
+
+const PORT                      = parseInt(cfg('PORT', '3000'), 10);
+const HOST                      = cfg('HOST', '0.0.0.0');
+const MAX_PARALLEL              = parseInt(cfg('MAX_PARALLEL', '64'), 10);
+const DEFAULT_REFERER           = cfg('DEFAULT_REFERER', 'https://example.com/');
+const PROXY_BASE                = cfg('PROXY_BASE', '');
+const ENABLE_FLARESOLVERR       = cfg('ENABLE_FLARESOLVERR', '0') === '1';
+const FLARESOLVERR              = cfg('FLARESOLVERR', 'http://flaresolverr:8191');
+const SEGMENT_CACHE_MAX         = parseInt(cfg('SEGMENT_CACHE_MAX', '500'), 10);
+const SEGMENT_CACHE_TTL_MS      = parseInt(cfg('SEGMENT_CACHE_TTL_MS', '90000'), 10);
+const MANIFEST_CACHE_MAX        = parseInt(cfg('MANIFEST_CACHE_MAX', '200'), 10);
+const MANIFEST_CACHE_TTL_MS     = parseInt(cfg('MANIFEST_CACHE_TTL_MS', '4000'), 10);
+const SEGMENT_CACHE_MAX_BYTES   = parseInt(cfg('SEGMENT_CACHE_MAX_BYTES', '2000000'), 10);
+const FETCH_TIMEOUT_MS          = parseInt(cfg('FETCH_TIMEOUT_MS', '15000'), 10);
+
+// Print resolved config on startup so you can verify CLI overrides worked.
+console.log('Starting with config:', {
+  PORT, HOST, MAX_PARALLEL, DEFAULT_REFERER, PROXY_BASE,
+  ENABLE_FLARESOLVERR, FLARESOLVERR,
+  SEGMENT_CACHE_MAX, SEGMENT_CACHE_TTL_MS,
+  MANIFEST_CACHE_MAX, MANIFEST_CACHE_TTL_MS,
+  SEGMENT_CACHE_MAX_BYTES, FETCH_TIMEOUT_MS,
+});
 
 const app = express();
 app.disable('x-powered-by');
@@ -354,7 +404,7 @@ app.get('/proxy/manifest', async (req, res) => {
 //  Usage: /proxy/stream?url=<encoded>&preferred_referer=<encoded>
 // ─────────────────────────────────────────────────────────────────
 app.get('/proxy/stream', async (req, res) => {
-  const url = decodeUrl(req);  // already handles ?url= (encoded) and ?u= (base64)
+  const url = decodeUrl(req);
   if (!url || !isSafeHttpUrl(url)) {
     return res.status(400).send('Parâmetro ?url= (encoded) ou ?u= (base64) com http/https é obrigatório.');
   }
@@ -362,18 +412,13 @@ app.get('/proxy/stream', async (req, res) => {
   const prefReferer = decodePreferredReferer(req, url);
   const headers = browserHeaders(prefReferer);
 
-  // Forward Range header so players can seek in finite streams
   if (req.headers.range) headers.Range = req.headers.range;
-
-  // Icecast/Shoutcast metadata requested by some players
   if (req.headers['icy-metadata']) headers['Icy-MetaData'] = req.headers['icy-metadata'];
 
   try {
     const cookies = await getFlareCookies(url, prefReferer);
     if (cookies) headers.Cookie = cookies;
 
-    // Use fetchFn directly — we don't want this counted against the
-    // parallel-segment semaphore since it will stay open for minutes.
     const streamController = new AbortController();
     const streamTimer = setTimeout(() => streamController.abort(), FETCH_TIMEOUT_MS);
     const upstream = await fetchFn(url, { method: 'GET', headers, redirect: 'follow', signal: streamController.signal });
@@ -383,20 +428,10 @@ app.get('/proxy/stream', async (req, res) => {
       return res.status(upstream.status).send(`Upstream returned ${upstream.status}`);
     }
 
-    // Pass through audio/video content-type and Icecast metadata headers
     const passthroughHeaders = [
-      'content-type',
-      'content-length',
-      'content-range',
-      'accept-ranges',
-      'cache-control',
-      'icy-name',
-      'icy-genre',
-      'icy-url',
-      'icy-br',
-      'icy-sr',
-      'icy-metaint',
-      'icy-description',
+      'content-type', 'content-length', 'content-range', 'accept-ranges',
+      'cache-control', 'icy-name', 'icy-genre', 'icy-url', 'icy-br',
+      'icy-sr', 'icy-metaint', 'icy-description',
     ];
 
     upstream.headers.forEach((value, key) => {
@@ -405,12 +440,10 @@ app.get('/proxy/stream', async (req, res) => {
       }
     });
 
-    // Default to audio/mpeg if upstream didn't tell us
     if (!res.getHeader('content-type')) {
       res.set('Content-Type', 'audio/mpeg');
     }
 
-    // Never cache live streams
     res.set('Cache-Control', 'no-store');
     res.status(upstream.status);
 
@@ -420,7 +453,6 @@ app.get('/proxy/stream', async (req, res) => {
     }
 
     nodeBody.pipe(res);
-
     nodeBody.on('error', () => res.end());
     req.on('close', () => {
       if (typeof nodeBody.destroy === 'function') nodeBody.destroy();
@@ -448,10 +480,7 @@ app.get('/proxy/segment', async (req, res) => {
     return res.status(200).send(cached.body);
   }
 
-  // browserHeaders already sets Referer/Origin from prefReferer — always
-  // send them so servers that validate the referer don't reject the request.
   const headers = browserHeaders(prefReferer);
-
   if (req.headers.range) headers.Range = req.headers.range;
 
   try {
@@ -464,14 +493,8 @@ app.get('/proxy/segment', async (req, res) => {
     }
 
     const passthroughHeaders = [
-      'content-type',
-      'content-length',
-      'content-range',
-      'accept-ranges',
-      'cache-control',
-      'etag',
-      'last-modified',
-      'content-disposition',
+      'content-type', 'content-length', 'content-range', 'accept-ranges',
+      'cache-control', 'etag', 'last-modified', 'content-disposition',
     ];
 
     upstream.headers.forEach((value, key) => {
@@ -502,11 +525,7 @@ app.get('/proxy/segment', async (req, res) => {
 
     res.status(upstream.status);
     nodeBody.pipe(res);
-
-    nodeBody.on('error', () => {
-      res.end();
-    });
-
+    nodeBody.on('error', () => res.end());
     req.on('close', () => {
       if (typeof nodeBody.destroy === 'function') nodeBody.destroy();
     });
@@ -519,8 +538,6 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`HLS public proxy listening on ${HOST}:${PORT}`);
 });
 
-// Keep-alive + headers timeout must exceed upstream FETCH_TIMEOUT_MS
-// so Express closes the request before nginx/Caddy fires a 504.
 server.keepAliveTimeout = FETCH_TIMEOUT_MS + 5000;
 server.headersTimeout   = FETCH_TIMEOUT_MS + 6000;
 
