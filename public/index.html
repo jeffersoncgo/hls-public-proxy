@@ -184,8 +184,10 @@
         </p>
         <div class="badges">
           <span class="badge">Manifest rewriting</span>
-          <span class="badge">Segment passthrough</span>
-          <span class="badge">Base64 URL support</span>
+          <span class="badge">Segment caching</span>
+          <span class="badge">Direct stream proxy</span>
+          <span class="badge">Concurrency control</span>
+          <span class="badge">FlareSolverr optional</span>          <span class="badge">Base64 URL support</span>
           <span class="badge">Custom referer</span>
           <span class="badge">Known origins</span>
           <span class="badge">CORS-friendly</span>
@@ -247,7 +249,10 @@
           <div>Fetches an upstream manifest and rewrites child URLs</div>
 
           <div>GET /proxy/segment</div>
-          <div>Fetches and streams segments or related assets</div>
+          <div>Fetches and streams HLS segments (with optional caching)</div>
+
+          <div>GET /proxy/stream</div>
+          <div>Direct passthrough streaming (radio, Icecast, non-HLS)</div>
 
           <div>url=</div>
           <div>Normal URL-encoded upstream URL</div>
@@ -276,15 +281,20 @@
 
         <div class="row">
           <button class="good" id="openManifestBtn">Open Manifest</button>
+          <button class="good" id="openSegmentBtn">Open Segment</button>
+          <button class="good" id="openStreamBtn">Open Stream</button>
           <button id="copyManifestBtn">Copy Manifest URL</button>
-          <button id="openSegmentBtn">Open Segment</button>
           <button id="copySegmentBtn">Copy Segment URL</button>
+          <button id="copyStreamBtn">Copy Stream URL</button>
         </div>
       </div>
 
       <div class="card card-pad">
         <h2>Included Example</h2>
-        <p>This page includes the exact example you requested.</p>
+        <p>
+          High-performance HLS proxy with manifest rewriting, segment caching,
+          direct stream support, concurrency control, and optional anti-bot bypass via FlareSolverr.
+        </p>
         <div class="result mono" id="exampleBox"></div>
         <div class="row">
           <button id="copyExampleBtn">Copy Example URL</button>
@@ -303,6 +313,9 @@
 
           <div>/proxy/segment</div>
           <div>Fetches and streams media segments or related assets back to the client.</div>
+
+          <div>/proxy/stream</div>
+          <div>Direct stream proxy without caching, designed for continuous audio/video streams.</div>
 
           <div>preferred_referer</div>
           <div>Used when the upstream expects a specific referer to allow access.</div>
@@ -419,6 +432,7 @@
 
       els.manifestUrl.value = buildQuery(targetUrl, preferredReferer, knownOrigins, mode, '/proxy/manifest');
       els.segmentUrl.value = buildQuery(targetUrl, preferredReferer, knownOrigins, mode, '/proxy/segment');
+      els.streamUrl.value = buildQuery(targetUrl, preferredReferer, knownOrigins, mode, '/proxy/stream');
     }
 
     function loadExample() {
@@ -469,6 +483,7 @@
         els.encodingMode.value = 'base64';
         els.manifestUrl.value = '';
         els.segmentUrl.value = '';
+        els.streamUrl.value = '';
       });
 
       els.targetUrl.addEventListener('input', buildAll);
@@ -484,6 +499,8 @@
       els.copyManifestBtn.addEventListener('click', () => copyText(els.manifestUrl.value));
       els.openSegmentBtn.addEventListener('click', () => openUrl(els.segmentUrl.value));
       els.copySegmentBtn.addEventListener('click', () => copyText(els.segmentUrl.value));
+      els.openStreamBtn.addEventListener('click', () => openUrl(els.streamUrl.value));
+      els.copyStreamBtn.addEventListener('click', () => copyText(els.streamUrl.value));
 
       els.copyExampleBtn.addEventListener('click', () => copyText(buildExactExampleUrl()));
       els.openExampleBtn.addEventListener('click', () => openUrl(buildExactExampleUrl()));
